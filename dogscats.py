@@ -25,14 +25,14 @@ for filename in filenames:
         categories.append(0)
 file_df = pd.DataFrame({'filename': filenames, 'category': categories})
 file_df['category'].replace({0: 'cat', 1: 'dog'}, inplace=True)
-file_df = file_df.sample(frac = 0.3)
+file_df = file_df.sample(frac = 0.05)
 train_df, val_df = train_test_split(file_df, test_size=0.2, random_state=0)
 train_df.reset_index(drop=True, inplace=True)
 val_df.reset_index(drop=True, inplace=True)
 
 total_train = train_df.shape[0]
 total_validate = val_df.shape[0]
-batch_size=5
+batch_size=32
 
 train_datagen = ImageDataGenerator(
     rotation_range=15,
@@ -50,7 +50,7 @@ train_generator = train_datagen.flow_from_dataframe(
     y_col='category',
     target_size=IMAGE_SIZE,
     class_mode='categorical',
-    batch_size=1000
+    batch_size=32
 )
 val_datagen = ImageDataGenerator(rescale=1./255)
 val_generator = val_datagen.flow_from_dataframe(
@@ -60,7 +60,7 @@ val_generator = val_datagen.flow_from_dataframe(
     y_col='category',
     target_size=IMAGE_SIZE,
     class_mode='categorical',
-    batch_size=1000
+    batch_size=32
 )
 
 num_classes = 2
@@ -71,7 +71,7 @@ compile_params = {
     'optimizer': 'adam',
     'metrics': ['accuracy']
 }
-shapes = list(map(tuple, np.random.randint(200, 2000, (10, 3))))
+shapes = list(map(tuple, np.random.randint(200, 2000, (3, 3))))
 compile_params = {
     'loss': "categorical_crossentropy",
     'optimizer': 'RMSprop',
@@ -79,7 +79,7 @@ compile_params = {
     }
 fit_params = (
     [train_generator], 
-    {'epochs': 3,
+    {'epochs': 10,
     'validation_data': val_generator,
     'validation_steps': total_validate//batch_size,
     'steps_per_epoch': total_train//batch_size,
@@ -98,7 +98,7 @@ fit_params2 = (
 
 model = EnsembleModel(shapes, num_classes, compile_params, fit_params)
 model.compile(**compile_params)
-model.fit_generator(*fit_params2[0], **fit_params2[1])
+model.fit(*fit_params2[0], **fit_params2[1])
 
 # Model Assessment
 model.get_model_accuracies(x_test, y_test)

@@ -33,7 +33,7 @@ compile_params = {
 	'optimizer': 'adam',
 	'metrics': ['accuracy']
 }
-shapes = list(map(tuple, np.random.randint(200, 2000, (10, 3))))
+shapes = list(map(tuple, np.random.randint(200, 2000, (3, 3))))
 compile_params = {
     'loss': "categorical_crossentropy",
     'optimizer': 'RMSprop',
@@ -41,13 +41,13 @@ compile_params = {
 	}
 fit_params = (
     [x_train, y_train],
-    {'batch_size': 1000,
+    {'batch_size': 100,
     'epochs': 3,
     'validation_split': 0.1}
     )
 fit_params2 = (
     [x_train, y_train],
-    {'batch_size': 1000,
+    {'batch_size': 100,
     'epochs': 10,
     'validation_split': 0.1}
     )
