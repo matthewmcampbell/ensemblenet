@@ -8,7 +8,6 @@ class EnsembleLayer(layers.Layer):
 
 	def __init__(self, dense_units, num_classes, conv_features = None):
 		super(EnsembleLayer, self).__init__()
-		# self.inp = keras.Input()
 		if conv_features is None:
 			conv_features = default_conv_features
 		print(conv_features)
@@ -24,9 +23,6 @@ class EnsembleLayer(layers.Layer):
 		self.probs = layers.Dense(num_classes, activation="softmax")
 
 	def call(self, inputs):
-		# x = keras.Input(shape = input_shape)(inputs)
-		# print(x)
-		# x = self.inp(inputs)
 		x = self.conv1(inputs)
 		x = self.pool1(x)
 		x = self.conv2(x)
@@ -48,13 +44,14 @@ class EnsembleUnit(keras.Model):
 
 class EnsembleModel(keras.Model):
 
-	def __init__(self, many_dense_units, num_classes, compile_params, fit_params, many_conv_features = None):
+	def __init__(self, many_dense_units, num_classes, compile_params, fit_params, many_conv_features = None, trainable = False):
 		super(EnsembleModel, self).__init__()
 		if many_conv_features is None:
 			many_conv_features = [None]*len(many_dense_units)
 		assert len(many_dense_units) == len(many_conv_features)
 
 		self.many_dense_units = many_dense_units
+		self.num_classes = num_classes
 		self.submodels = [EnsembleUnit(dense_units, num_classes, conv_features) for dense_units, conv_features in zip(many_dense_units, many_conv_features)]
 		[model.compile(**compile_params) for model in self.submodels]
 		# [model.fit(*fit_params[0], **fit_params[1]) for model in self.submodels]
@@ -64,8 +61,9 @@ class EnsembleModel(keras.Model):
 			print('\tDense shapes: {}'.format(many_dense_units[i]))
 			model.fit(*fit_params[0], **fit_params[1])
 		for model in self.submodels:
-			model.trainable = False
-		self.Dense1 = layers.Dense(1500, activation = 'relu')
+			model.trainable = False if not trainable else True
+
+		self.Dense1 = layers.Dense(2*self.num_classes*len(self.many_dense_units), activation = 'relu')
 		self.out_layer = layers.Dense(num_classes, activation = "softmax")
 
 	def call(self, inputs):

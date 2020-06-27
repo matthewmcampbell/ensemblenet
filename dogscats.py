@@ -5,6 +5,7 @@ the dogs vs cats dataset and cleaning steps. Thanks Uysim.
 '''
 
 import os
+import datetime as dt
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -16,7 +17,6 @@ from sklearn.model_selection import train_test_split
 from ensemblenet import EnsembleModel
 from tensorflow.compat.v1 import ConfigProto, Session, RunOptions
 from tensorflow.compat.v1.keras.backend import set_session
-import tensorflow as tf
 
 tf.keras.fit_verbose = 2
 
@@ -45,9 +45,10 @@ for filename in filenames:
         categories.append(1)
     else:
         categories.append(0)
+        
 file_df = pd.DataFrame({'filename': filenames, 'category': categories})
 file_df['category'].replace({0: 'cat', 1: 'dog'}, inplace=True)
-# file_df = file_df.sample(frac = 0.5)
+file_df = file_df.sample(frac = 0.05)
 train_df, val_df = train_test_split(file_df, test_size=0.2, random_state=0)
 train_df.reset_index(drop=True, inplace=True)
 val_df.reset_index(drop=True, inplace=True)
@@ -87,17 +88,16 @@ val_generator = val_datagen.flow_from_dataframe(
 
 
 num_classes = 2
-num_sub_models = 10
-num_dense_layers = 3
-
-compile_params = {
-    'loss': "categorical_crossentropy",
-    'optimizer': 'adam',
-    'metrics': ['accuracy']
-}
-
+num_sub_models = 3
+num_dense_layers = 2
 dense_shapes = list(map(lambda x: sorted(tuple(x)), np.random.randint(200, 2000, (num_sub_models, num_dense_layers))))
 conv_shapes = list(map(lambda x: sorted(tuple(2**x)), np.random.randint(2, 6, (num_sub_models, 2))))
+
+log_dir_sub = "./logs/fit/submodels/"
+log_dir_main = "./logs/fit/main/" + dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+tensorboard_callback_sub = tf.keras.callbacks.TensorBoard(log_dir=log_dir_sub, histogram_freq=1, profile_batch=0)
+tensorboard_callback_main = tf.keras.callbacks.TensorBoard(log_dir=log_dir_main, histogram_freq=1)
+
 compile_params = {
     'loss': "categorical_crossentropy",
     'optimizer': 'RMSprop',
@@ -105,26 +105,26 @@ compile_params = {
     }
 fit_params = (
     [train_generator], 
-    {'epochs': 5,
+    {'epochs': 3,
     'validation_data': val_generator,
     'validation_steps': total_validate//batch_size,
     'steps_per_epoch': total_train//batch_size,
     'verbose': 2,
-    # 'callbacks': callbacks,
+    'callbacks': [tensorboard_callback_sub],
     }
-    )
+)
 fit_params2 = (
     [train_generator],
-    {'epochs': 10,
+    {'epochs': 100,
     'validation_data': val_generator,
     'validation_steps': total_validate//batch_size,
     'steps_per_epoch': total_train//batch_size,
     'verbose': 2,
-    # 'callbacks': callbacks,
+    'callbacks': [tensorboard_callback_main],
     }
-    )
+)
 
-model = EnsembleModel(dense_shapes, num_classes, compile_params, fit_params, conv_shapes)
+model = EnsembleModel(dense_shapes, num_classes, compile_params, fit_params, conv_shapes, trainable=False)
 model.compile(**compile_params)
 model.fit(*fit_params2[0], **fit_params2[1])
 
