@@ -1,3 +1,4 @@
 # exclude pycache
 /__pycache__
 /logs
+/.idea
