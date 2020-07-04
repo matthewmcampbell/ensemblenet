@@ -48,12 +48,12 @@ class EnsembleUnit(keras.Model):
 class EnsembleModel(keras.Model):
 
     def __init__(self, many_dense_units, num_classes, compile_params,
-                 fit_params, many_conv_features=None, trainable=False):
+                 fit_params, many_conv_features=None, trainable=False,
+                 logging=None):
         super(EnsembleModel, self).__init__()
         if many_conv_features is None:
             many_conv_features = [None] * len(many_dense_units)
         assert len(many_dense_units) == len(many_conv_features)
-
         self.many_dense_units = many_dense_units
         self.num_classes = num_classes
         self.submodels = [EnsembleUnit(dense_units, num_classes, conv_features)
@@ -61,11 +61,17 @@ class EnsembleModel(keras.Model):
                           zip(many_dense_units, many_conv_features)]
         [model.compile(**compile_params) for model in self.submodels]
         for i, model in enumerate(self.submodels):
+            if logging:
+                tensorboard_callback_sub = tf.keras.callbacks.TensorBoard(
+                    log_dir=logging + '/{}/'.format(i+1), histogram_freq=1
+                )
+                fit_params[1]['callbacks'] = [tensorboard_callback_sub]
             print('Structure of submodel {}:'.format(i + 1))
             print('\tConv shapes: {}'.format(many_conv_features[i])) if not (
-                        many_conv_features[i] is None) else print(
+                    many_conv_features[i] is None) else print(
                 '\tConv shapes: {}'.format(default_conv_features))
             print('\tDense shapes: {}'.format(many_dense_units[i]))
+            print(fit_params[1])
             model.fit(*fit_params[0], **fit_params[1])
         for model in self.submodels:
             model.trainable = False if not trainable else True

@@ -32,26 +32,48 @@ config.log_device_placement = True
 sess = Session(config=config)
 set_session(sess)
 
-# Logging for Tensorboard
-log_dir_sub = "./logs/fit/submodels/" + dt.datetime.now().strftime(
-    "%Y%m%d-%H%M%S")
-log_dir_main = "./logs/fit/main/" + dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-tensorboard_callback_sub = tf.keras.callbacks.TensorBoard(
-    log_dir=log_dir_sub, histogram_freq=1, profile_batch=0
-)
-tensorboard_callback_main = tf.keras.callbacks.TensorBoard(
-    log_dir=log_dir_main, histogram_freq=1
-)
-
 # Image settings
 IMAGE_WIDTH = 128
 IMAGE_HEIGHT = 128
 IMAGE_SIZE = (IMAGE_WIDTH, IMAGE_HEIGHT)
-IMAGE_CHANNELS = 3
+IMAGE_CHANNELS = 3  # RGB
 train_path = 'c:/users/matthew/projects/data/dogs-vs-cats/train/train/'
 test_path = 'c:/users/matthew/projects/data/dogs-vs-cats/test1/test1/'
-file_frac = 0.05
+file_frac = 1.0
 batch_size = 16
+
+# Model Hyperparameters
+# Epochs for meta learner
+main_epochs = 50
+# Epochs for base models
+sub_epochs = 4
+# Number of classes to predict
+num_classes = 2
+# Number of base models
+num_sub_models = 10
+# Number of dense layers in each base model
+num_dense_layers = 2
+# Neurons in dense layers above
+dense_shapes = list(map(
+    lambda x: sorted(tuple(x)),
+    np.random.randint(200, 2000, (num_sub_models, num_dense_layers))
+))
+# Out-channels in convolutional layers of base models
+conv_shapes = list(map(
+    lambda x: sorted(tuple(2 ** x)),
+    np.random.randint(2, 6, (num_sub_models, 2))
+))
+
+# Logging for Tensorboard
+log_dir_sub = "./logs/fit/submodels/" + dt.datetime.now().strftime(
+    "%Y%m%d-%H%M%S")
+log_dir_main = "./logs/fit/main/" + dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+# tensorboard_callback_sub = tf.keras.callbacks.TensorBoard(
+#     log_dir=log_dir_sub, histogram_freq=1, profile_batch=0
+# )
+tensorboard_callback_main = tf.keras.callbacks.TensorBoard(
+    log_dir=log_dir_main, histogram_freq=1
+)
 
 filenames = os.listdir(train_path)
 categories = []
@@ -107,27 +129,6 @@ val_generator = val_datagen.flow_from_dataframe(
     batch_size=batch_size
 )
 
-# Model Hyperparameters
-
-# Number of classes to predict
-num_classes = 2
-# Number of base models
-num_sub_models = 10
-# Number of dense layers in each base model
-num_dense_layers = 2
-# Neurons in dense layers above
-dense_shapes = list(map(
-    lambda x: sorted(tuple(x)),
-    np.random.randint(200, 2000, (num_sub_models, num_dense_layers))
-))
-# Out-channels in convolutional layers of base models
-conv_shapes = list(map(
-    lambda x: sorted(tuple(2 ** x)),
-    np.random.randint(2, 6, (num_sub_models, 2))
-))
-
-
-
 compile_params = {
     'loss': "categorical_crossentropy",
     'optimizer': 'RMSprop',
@@ -135,17 +136,17 @@ compile_params = {
 }
 fit_params = (
     [train_generator],
-    {'epochs': 5,
+    {'epochs': sub_epochs,
      'validation_data': val_generator,
      'validation_steps': total_validate // batch_size,
      'steps_per_epoch': total_train // batch_size,
      'verbose': 2,
-     'callbacks': [tensorboard_callback_sub],
+     # 'callbacks': [tensorboard_callback_sub],
      }
 )
 fit_params2 = (
     [train_generator],
-    {'epochs': 100,
+    {'epochs': main_epochs,
      'validation_data': val_generator,
      'validation_steps': total_validate // batch_size,
      'steps_per_epoch': total_train // batch_size,
@@ -156,7 +157,8 @@ fit_params2 = (
 
 model = EnsembleModel(
     dense_shapes, num_classes, compile_params,
-    fit_params, conv_shapes, trainable=False
+    fit_params, conv_shapes, trainable=False,
+    logging=log_dir_sub
 )
 model.compile(**compile_params)
 model.fit(*fit_params2[0], **fit_params2[1])
