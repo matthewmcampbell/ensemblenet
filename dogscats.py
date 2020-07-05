@@ -9,26 +9,20 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-import tensorflow.keras as keras
-from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from sklearn.model_selection import train_test_split
-
-from ensemblenet import EnsembleModel
 from tensorflow.compat.v1 import ConfigProto, Session, RunOptions
 from tensorflow.compat.v1.keras.backend import set_session
 
+from ensemblenet import EnsembleModel
+
 # Run Options
-np.random.seed(0)
-# Print status after every epoch
-tf.keras.fit_verbose = 2
-RunOptions.report_tensor_allocations_upon_oom = True
+np.random.seed(0)  # Seed for reproducing
+tf.keras.fit_verbose = 2  # Print status after every epoch
+RunOptions.report_tensor_allocations_upon_oom = True  # Out-of-memory display
 config = ConfigProto()
-# dynamically grow the memory used on the GPU
-config.gpu_options.allow_growth = True
-# to log device placement (on which device the operation ran)
+config.gpu_options.allow_growth = True  # dynamically grow GPU memory
 config.log_device_placement = True
-# set this TensorFlow session as the default session for Keras
 sess = Session(config=config)
 set_session(sess)
 
@@ -43,16 +37,13 @@ file_frac = 1.0
 batch_size = 16
 
 # Model Hyperparameters
-# Epochs for meta learner
-main_epochs = 50
-# Epochs for base models
-sub_epochs = 4
-# Number of classes to predict
-num_classes = 2
-# Number of base models
-num_sub_models = 10
-# Number of dense layers in each base model
-num_dense_layers = 2
+
+main_epochs = 10  # Epochs for meta learner
+sub_epochs = 5  # Epochs for base models
+num_classes = 2  # Number of classes to predict
+num_sub_models = 5  # Number of base models
+num_dense_layers = 2  # Number of dense layers in each base model
+
 # Neurons in dense layers above
 dense_shapes = list(map(
     lambda x: sorted(tuple(x)),
@@ -176,9 +167,15 @@ test_generator = test_datagen.flow_from_dataframe(
     shuffle=False
 )
 
+
 # Model Assessment
-pred_class = model.predict(test_generator)
-pred = np.round(pred_class[:, 1])
-test_df['category'].replace(['cat', 'dog'], [0, 1], inplace=True)
-truth = test_df['category']
-accuracy = np.mean(pred == truth)
+def model_accuracy(test_generator) -> float:
+    pred_class = model.predict(test_generator)
+    pred = np.round(pred_class[:, 1])
+    test_df['category'].replace(['cat', 'dog'], [0, 1], inplace=True)
+    truth = test_df['category']
+    accuracy = np.mean(pred == truth)
+    return accuracy
+
+accuracy = model_accuracy(test_generator)
+print("Model Accuracy: ", accuracy)

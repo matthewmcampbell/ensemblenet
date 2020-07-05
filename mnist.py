@@ -33,7 +33,8 @@ compile_params = {
     'optimizer': 'adam',
     'metrics': ['accuracy']
 }
-shapes = list(map(tuple, np.random.randint(200, 2000, (3, 3))))
+shapes = list(map(lambda x: sorted(tuple(x)), np.random.randint(200, 2000,
+                                                                (3, 3))))
 compile_params = {
     'loss': "categorical_crossentropy",
     'optimizer': 'RMSprop',
