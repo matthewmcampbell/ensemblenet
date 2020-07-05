@@ -9,10 +9,12 @@ class EnsembleLayer(layers.Layer):
 
     def __init__(self, dense_units, num_classes, conv_features=None):
         super(EnsembleLayer, self).__init__()
+
         if conv_features is None:
             conv_features = default_conv_features
         assert len(conv_features) == 2
         c1, c2 = conv_features
+
         self.conv1 = layers.Conv2D(c1, kernel_size=(3, 3), activation="relu")
         self.pool1 = layers.MaxPooling2D(pool_size=(2, 2))
         self.conv2 = layers.Conv2D(c2, kernel_size=(3, 3), activation="relu")
@@ -68,6 +70,7 @@ class EnsembleModel(keras.Model):
         if many_conv_features is None:
             many_conv_features = [None] * len(many_dense_units)
         assert len(many_dense_units) == len(many_conv_features)
+
         self.many_dense_units = many_dense_units
         self.num_classes = num_classes
         self.submodels = [EnsembleUnit(dense_units, num_classes, conv_features)
@@ -76,6 +79,7 @@ class EnsembleModel(keras.Model):
 
         [model.compile(**compile_params) for model in self.submodels]
 
+        # No list comprehension on the fitting, list can't hold all models in memory.
         for i, model in enumerate(self.submodels):
             if logging:
                 update_log_callback(logging + '/{}/'.format(i + 1), fit_params)
@@ -84,6 +88,7 @@ class EnsembleModel(keras.Model):
         for model in self.submodels:
             model.trainable = False if not trainable else True
 
+        # Meta Learner Layers
         self.Dense1 = layers.Dense(
             2 * self.num_classes * len(self.many_dense_units),
             activation='relu')
@@ -92,6 +97,8 @@ class EnsembleModel(keras.Model):
 
     def call(self, inputs):
 
+        # Feed in images to each base model, concatenate probabilities
+        # to feed into meta learner.
         probs = [model(inputs) for model in self.submodels]
         prob_layer = tf.concat(probs, axis=1)
         x = self.Dense1(prob_layer)
@@ -100,6 +107,8 @@ class EnsembleModel(keras.Model):
 
     def get_model_accuracies(self, x_test, y_test):
 
+    # Currently only used for mnist... Needs adjustments
+    # to work with keras ImageDataGenerators
         for i, model in enumerate(self.submodels):
             m = keras.metrics.CategoricalAccuracy()
             m.update_state(model(x_test), y_test)
