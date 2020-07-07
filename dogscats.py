@@ -37,12 +37,12 @@ file_frac = 1.0
 batch_size = 16
 
 # Model Hyperparameters
-main_epochs = 10  # Epochs for meta learner
-sub_epochs = 5  # Epochs for base models
+main_epochs = 50  # Epochs for meta learner
+sub_epochs = 10  # Epochs for base models
 num_classes = 2  # Number of classes to predict
 num_sub_models = 5  # Number of base models
 num_dense_layers = 2  # Number of dense layers in each base model
-
+num_conv_layers = 3
 # Neurons in dense layers above
 dense_shapes = list(map(
     lambda x: sorted(tuple(x)),
@@ -51,8 +51,12 @@ dense_shapes = list(map(
 # Out-channels in convolutional layers of base models
 conv_shapes = list(map(
     lambda x: sorted(tuple(2 ** x)),
-    np.random.randint(2, 6, (num_sub_models, 2))
+    np.random.randint(3, 8, (num_sub_models, num_conv_layers))
 ))
+
+conv_shapes = ((32, 64, 128), (16, 32, 64), (8, 16, 32), (32, 64, 128), (16,
+                                                                         64,
+                                                                         128)
 
 # Logging for Tensorboard
 log_dir_sub = "./logs/fit/submodels/" + dt.datetime.now().strftime(
@@ -95,8 +99,8 @@ def main():
         shear_range=0.1,
         zoom_range=0.2,
         horizontal_flip=True,
-        width_shift_range=0.2,  # 0.1
-        height_shift_range=0.2  # 0.1
+        width_shift_range=0.1,  # 0.1
+        height_shift_range=0.1  # 0.1
     )
     train_generator = train_datagen.flow_from_dataframe(
         train_df,

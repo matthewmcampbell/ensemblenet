@@ -5,45 +5,60 @@ from tensorflow.keras import layers
 default_conv_features = [16, 32]
 
 
-class EnsembleLayer(layers.Layer):
-
+# class EnsembleLayer(layers.Layer):
+class EnsembleUnit(keras.Model):
     def __init__(self, dense_units, num_classes, conv_features=None):
-        super(EnsembleLayer, self).__init__()
+        # super(EnsembleLayer, self).__init__()
 
+        super(EnsembleUnit, self).__init__()
         if conv_features is None:
             conv_features = default_conv_features
-        assert len(conv_features) == 2
-        c1, c2 = conv_features
-
-        self.conv1 = layers.Conv2D(c1, kernel_size=(3, 3), activation="relu")
-        self.pool1 = layers.MaxPooling2D(pool_size=(2, 2))
-        self.conv2 = layers.Conv2D(c2, kernel_size=(3, 3), activation="relu")
-        self.pool2 = layers.MaxPooling2D(pool_size=(2, 2))
+        # assert len(conv_features) == 2
+        # c1, c2 = conv_features
+        self.conv_features = conv_features
+        self.convs = [layers.Conv2D(c, kernel_size=(3, 3),
+                      activation='relu') for c in conv_features]
+        self.batch_norms = [layers.BatchNormalization() for _ in conv_features]
+        self.pools = [layers.MaxPooling2D(pool_size=(2, 2))
+                      for _ in conv_features]
+        self.drops = [layers.Dropout(0.25) for _ in conv_features]
+        # self.conv1 = layers.Conv2D(c1, kernel_size=(3, 3), activation="relu")
+        # self.pool1 = layers.MaxPooling2D(pool_size=(2, 2))
+        # self.conv2 = layers.Conv2D(c2, kernel_size=(3, 3), activation="relu")
+        # self.pool2 = layers.MaxPooling2D(pool_size=(2, 2))
         self.flat = layers.Flatten()
         self.denses = [layers.Dense(d, activation="relu") for d in dense_units]
+        self.batch_norm = layers.BatchNormalization()
         self.dropout = layers.Dropout(0.5)
         self.probs = layers.Dense(num_classes, activation="softmax")
 
     def call(self, inputs):
-        x = self.conv1(inputs)
-        x = self.pool1(x)
-        x = self.conv2(x)
-        x = self.pool2(x)
+        # x = self.conv1(inputs)
+        x = inputs
+        for i in range(len(self.conv_features)):
+            x = self.convs[i](x)
+            x = self.batch_norms[i](x)
+            x = self.pools[i](x)
+            x = self.drops[i](x)
+        # x = self.pool1(x)
+        # x = self.conv2(x)
+        # x = self.pool2(x)
         x = self.flat(x)
         for dense in self.denses:
             x = dense(x)
+        x = self.batch_norm(x)
         x = self.dropout(x)
         return self.probs(x)
 
 
-class EnsembleUnit(keras.Model):
-
-    def __init__(self, dense_units, num_classes, conv_features=None):
-        super(EnsembleUnit, self).__init__()
-        self.block = EnsembleLayer(dense_units, num_classes, conv_features)
-
-    def call(self, inputs):
-        return self.block(inputs)
+# class EnsembleUnit(keras.Model):
+#
+#     def __init__(self, dense_units, num_classes, conv_features=None):
+#         super(EnsembleUnit, self).__init__()
+#         self.block = EnsembleLayer(dense_units, num_classes, conv_features)
+#
+#     def call(self, inputs):
+#         return self.block(inputs)
 
 
 class EnsembleModel(keras.Model):
@@ -77,6 +92,11 @@ class EnsembleModel(keras.Model):
                           for dense_units, conv_features in
                           zip(many_dense_units, many_conv_features)]
 
+        print('Model Pretrain Summary:')
+        for i in range(len(self.submodels)):
+            print("\tDense Shapes: {} Conv Shapes: {}".format(
+                many_dense_units[i], many_conv_features[i]))
+
         [model.compile(**compile_params) for model in self.submodels]
 
         # No list comprehension on the fitting, list can't hold all models in memory.
@@ -85,6 +105,7 @@ class EnsembleModel(keras.Model):
                 update_log_callback(logging + '/{}/'.format(i + 1), fit_params)
             print_structure(i)
             model.fit(*fit_params[0], **fit_params[1])
+            model.summary()
         for model in self.submodels:
             model.trainable = False if not trainable else True
 
