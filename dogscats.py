@@ -13,6 +13,7 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from sklearn.model_selection import train_test_split
 from tensorflow.compat.v1 import ConfigProto, Session, RunOptions
 from tensorflow.compat.v1.keras.backend import set_session
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
 from ensemblenet import EnsembleModel
 
@@ -33,12 +34,12 @@ IMAGE_SIZE = (IMAGE_WIDTH, IMAGE_HEIGHT)
 IMAGE_CHANNELS = 3  # RGB
 train_path = 'c:/users/matthew/projects/data/dogs-vs-cats/train/train/'
 test_path = 'c:/users/matthew/projects/data/dogs-vs-cats/test1/test1/'
-file_frac = 1.0
+file_frac = 0.05
 batch_size = 16
 
 # Model Hyperparameters
-main_epochs = 5  # Epochs for meta learner
-sub_epochs = 30  # Epochs for base models
+main_epochs = 20  # Epochs for meta learner
+sub_epochs = 3  # Epochs for base models
 num_classes = 2  # Number of classes to predict
 num_sub_models = 5  # Number of base models
 num_dense_layers = 2  # Number of dense layers in each base model
@@ -58,6 +59,13 @@ conv_shapes = ((32, 64, 128), (16, 32, 64), (8, 16, 32), (32, 64, 128), (16,
                                                                          64,
                                                                          128))
 
+# Callbacks for modifying learning as we train
+early_stop_sub = EarlyStopping(patience=10)
+learning_rate_sub = ReduceLROnPlateau(monitor='val_loss', patience=5,
+                                     factor=0.5)
+early_stop_main = EarlyStopping(patience=8)
+learning_rate_main = ReduceLROnPlateau(monitor='val_loss', patience=4,
+                                       factor=0.1)
 # Logging for Tensorboard
 log_dir_sub = "./logs/fit/submodels/" + dt.datetime.now().strftime(
     "%Y%m%d-%H%M%S")
@@ -134,7 +142,7 @@ def main():
          'validation_steps': total_validate // batch_size,
          'steps_per_epoch': total_train // batch_size,
          'verbose': 2,
-         # 'callbacks': [tensorboard_callback_sub],
+         'callbacks': [early_stop_sub, learning_rate_sub],
          }
     )
     fit_params2 = (
@@ -144,7 +152,8 @@ def main():
          'validation_steps': total_validate // batch_size,
          'steps_per_epoch': total_train // batch_size,
          'verbose': 2,
-         'callbacks': [tensorboard_callback_main],
+         'callbacks': [early_stop_main, learning_rate_main,
+                       tensorboard_callback_main],
          }
     )
 

@@ -2,30 +2,23 @@ import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras import layers
 
-default_conv_features = [16, 32]
 
 
 # class EnsembleLayer(layers.Layer):
 class EnsembleUnit(keras.Model):
     def __init__(self, dense_units, num_classes, conv_features=None):
-        # super(EnsembleLayer, self).__init__()
 
+        default_conv_features = [16, 32]
         super(EnsembleUnit, self).__init__()
         if conv_features is None:
             conv_features = default_conv_features
-        # assert len(conv_features) == 2
-        # c1, c2 = conv_features
         self.conv_features = conv_features
         self.convs = [layers.Conv2D(c, kernel_size=(3, 3),
-                      activation='relu') for c in conv_features]
+                                    activation='relu') for c in conv_features]
         self.batch_norms = [layers.BatchNormalization() for _ in conv_features]
         self.pools = [layers.MaxPooling2D(pool_size=(2, 2))
                       for _ in conv_features]
         self.drops = [layers.Dropout(0.25) for _ in conv_features]
-        # self.conv1 = layers.Conv2D(c1, kernel_size=(3, 3), activation="relu")
-        # self.pool1 = layers.MaxPooling2D(pool_size=(2, 2))
-        # self.conv2 = layers.Conv2D(c2, kernel_size=(3, 3), activation="relu")
-        # self.pool2 = layers.MaxPooling2D(pool_size=(2, 2))
         self.flat = layers.Flatten()
         self.denses = [layers.Dense(d, activation="relu") for d in dense_units]
         self.batch_norm = layers.BatchNormalization()
@@ -40,9 +33,6 @@ class EnsembleUnit(keras.Model):
             x = self.batch_norms[i](x)
             x = self.pools[i](x)
             x = self.drops[i](x)
-        # x = self.pool1(x)
-        # x = self.conv2(x)
-        # x = self.pool2(x)
         x = self.flat(x)
         for dense in self.denses:
             x = dense(x)
@@ -51,27 +41,22 @@ class EnsembleUnit(keras.Model):
         return self.probs(x)
 
 
-# class EnsembleUnit(keras.Model):
-#
-#     def __init__(self, dense_units, num_classes, conv_features=None):
-#         super(EnsembleUnit, self).__init__()
-#         self.block = EnsembleLayer(dense_units, num_classes, conv_features)
-#
-#     def call(self, inputs):
-#         return self.block(inputs)
-
-
 class EnsembleModel(keras.Model):
 
     def __init__(self, many_dense_units, num_classes, compile_params,
                  fit_params, many_conv_features=None, trainable=False,
-                 logging=None):
+                 logging=None, disp_summary=False):
 
         def update_log_callback(logging, fit_params):
             tensorboard_callback_sub = tf.keras.callbacks.TensorBoard(
                 log_dir=logging, histogram_freq=1)
-            fit_params[1]['callbacks'] = [tensorboard_callback_sub]
-            return None
+            # Copy fit_params to keep original untouched
+            res = [fit_params[0][:], dict(fit_params[1])]
+            callbacks = res[1]['callbacks'][:]
+            callbacks += [tensorboard_callback_sub]
+            res[1]['callbacks'] = callbacks
+            print(res[1]['callbacks'])
+            return res
 
         def print_structure(i):
             print('Structure of submodel {}:'.format(i + 1))
@@ -97,15 +82,19 @@ class EnsembleModel(keras.Model):
             print("\tDense Shapes: {} Conv Shapes: {}".format(
                 many_dense_units[i], many_conv_features[i]))
 
+        # Compile each submodel
         [model.compile(**compile_params) for model in self.submodels]
 
-        # No list comprehension on the fitting, list can't hold all models in memory.
+        # No list comprehension on the fitting,
+        # list can't hold all models in memory.
         for i, model in enumerate(self.submodels):
+            submodel_params = fit_params[:]  # Make a copy for each loop
             if logging:
-                update_log_callback(logging + '/{}/'.format(i + 1), fit_params)
+                log_path = logging + '/{}/'.format(i + 1)
+                submodel_params = update_log_callback(log_path, fit_params)
             print_structure(i)
-            model.fit(*fit_params[0], **fit_params[1])
-            model.summary()
+            model.fit(*submodel_params[0], **submodel_params[1])
+            model.summary() if disp_summary else False
         for model in self.submodels:
             model.trainable = False if not trainable else True
 
