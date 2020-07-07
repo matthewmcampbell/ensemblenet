@@ -37,8 +37,8 @@ file_frac = 1.0
 batch_size = 16
 
 # Model Hyperparameters
-main_epochs = 50  # Epochs for meta learner
-sub_epochs = 10  # Epochs for base models
+main_epochs = 5  # Epochs for meta learner
+sub_epochs = 30  # Epochs for base models
 num_classes = 2  # Number of classes to predict
 num_sub_models = 5  # Number of base models
 num_dense_layers = 2  # Number of dense layers in each base model
@@ -56,7 +56,7 @@ conv_shapes = list(map(
 
 conv_shapes = ((32, 64, 128), (16, 32, 64), (8, 16, 32), (32, 64, 128), (16,
                                                                          64,
-                                                                         128)
+                                                                         128))
 
 # Logging for Tensorboard
 log_dir_sub = "./logs/fit/submodels/" + dt.datetime.now().strftime(
