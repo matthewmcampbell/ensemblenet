@@ -2,23 +2,22 @@ import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras import layers
 
+default_conv_features = [16, 32]
 
 
-# class EnsembleLayer(layers.Layer):
-class EnsembleUnit(keras.Model):
+class BaseModel(keras.Model):
     def __init__(self, dense_units, num_classes, conv_features=None):
-
-        default_conv_features = [16, 32]
-        super(EnsembleUnit, self).__init__()
+        super(BaseModel, self).__init__()
         if conv_features is None:
             conv_features = default_conv_features
         self.conv_features = conv_features
+        # Start of the model layers:
         self.convs = [layers.Conv2D(c, kernel_size=(3, 3),
                                     activation='relu') for c in conv_features]
         self.batch_norms = [layers.BatchNormalization() for _ in conv_features]
-        self.pools = [layers.MaxPooling2D(pool_size=(2, 2))
-                      for _ in conv_features]
-        self.drops = [layers.Dropout(0.25) for _ in conv_features]
+        self.max_pools = [layers.MaxPooling2D(pool_size=(2, 2))
+                          for _ in conv_features]
+        self.dropouts = [layers.Dropout(0.25) for _ in conv_features]
         self.flat = layers.Flatten()
         self.denses = [layers.Dense(d, activation="relu") for d in dense_units]
         self.batch_norm = layers.BatchNormalization()
@@ -26,13 +25,12 @@ class EnsembleUnit(keras.Model):
         self.probs = layers.Dense(num_classes, activation="softmax")
 
     def call(self, inputs):
-        # x = self.conv1(inputs)
         x = inputs
         for i in range(len(self.conv_features)):
             x = self.convs[i](x)
             x = self.batch_norms[i](x)
-            x = self.pools[i](x)
-            x = self.drops[i](x)
+            x = self.max_pools[i](x)
+            x = self.dropouts[i](x)
         x = self.flat(x)
         for dense in self.denses:
             x = dense(x)
@@ -41,10 +39,11 @@ class EnsembleUnit(keras.Model):
         return self.probs(x)
 
 
-class EnsembleModel(keras.Model):
+class StackingModel(keras.Model):
 
-    def __init__(self, many_dense_units, num_classes, compile_params,
-                 fit_params, many_conv_features=None, trainable=False,
+    def __init__(self, num_classes, compile_params,
+                 fit_params, many_dense_units, many_conv_features=None,
+                 trainable=False,
                  logging=None, disp_summary=False):
 
         def update_log_callback(logging, fit_params):
@@ -66,14 +65,14 @@ class EnsembleModel(keras.Model):
             print('\tDense shapes: {}'.format(many_dense_units[i]))
             return None
 
-        super(EnsembleModel, self).__init__()
+        super(StackingModel, self).__init__()
         if many_conv_features is None:
             many_conv_features = [None] * len(many_dense_units)
         assert len(many_dense_units) == len(many_conv_features)
 
         self.many_dense_units = many_dense_units
         self.num_classes = num_classes
-        self.submodels = [EnsembleUnit(dense_units, num_classes, conv_features)
+        self.submodels = [BaseModel(dense_units, num_classes, conv_features)
                           for dense_units, conv_features in
                           zip(many_dense_units, many_conv_features)]
 
@@ -99,10 +98,10 @@ class EnsembleModel(keras.Model):
             model.trainable = False if not trainable else True
 
         # Meta Learner Layers
-        self.Dense1 = layers.Dense(
+        self.Dense_meta = layers.Dense(
             2 * self.num_classes * len(self.many_dense_units),
             activation='relu')
-        self.dropout_main = layers.Dropout(0.5)
+        self.dropout_meta = layers.Dropout(0.5)
         self.out_layer = layers.Dense(num_classes, activation="softmax")
 
     def call(self, inputs):
@@ -111,8 +110,8 @@ class EnsembleModel(keras.Model):
         # to feed into meta learner.
         probs = [model(inputs) for model in self.submodels]
         prob_layer = tf.concat(probs, axis=1)
-        x = self.Dense1(prob_layer)
-        x = self.dropout_main(x)
+        x = self.Dense_meta(prob_layer)
+        x = self.dropout_meta(x)
         return self.out_layer(x)
 
     def get_model_accuracies(self, x_test, y_test):

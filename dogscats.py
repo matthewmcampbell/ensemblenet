@@ -15,7 +15,7 @@ from tensorflow.compat.v1 import ConfigProto, Session, RunOptions
 from tensorflow.compat.v1.keras.backend import set_session
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
-from ensemblenet import EnsembleModel
+from ensemblenet import StackingModel
 
 # Run Options
 np.random.seed(0)  # Seed for reproducing
@@ -34,19 +34,19 @@ IMAGE_SIZE = (IMAGE_WIDTH, IMAGE_HEIGHT)
 IMAGE_CHANNELS = 3  # RGB
 train_path = 'c:/users/matthew/projects/data/dogs-vs-cats/train/train/'
 test_path = 'c:/users/matthew/projects/data/dogs-vs-cats/test1/test1/'
-file_frac = 0.05
+file_frac = 1
 batch_size = 16
 
 # Model Hyperparameters
-main_epochs = 20  # Epochs for meta learner
-sub_epochs = 3  # Epochs for base models
+main_epochs = 50  # Epochs for meta learner
+sub_epochs = 50  # Epochs for base models
 num_classes = 2  # Number of classes to predict
 num_sub_models = 5  # Number of base models
 num_dense_layers = 2  # Number of dense layers in each base model
 num_conv_layers = 3
 # Neurons in dense layers above
 dense_shapes = list(map(
-    lambda x: sorted(tuple(x)),
+    lambda x: sorted(tuple(x), reverse=True),
     np.random.randint(200, 2000, (num_sub_models, num_dense_layers))
 ))
 # Out-channels in convolutional layers of base models
@@ -60,12 +60,12 @@ conv_shapes = ((32, 64, 128), (16, 32, 64), (8, 16, 32), (32, 64, 128), (16,
                                                                          128))
 
 # Callbacks for modifying learning as we train
-early_stop_sub = EarlyStopping(patience=10)
-learning_rate_sub = ReduceLROnPlateau(monitor='val_loss', patience=5,
-                                     factor=0.5)
-early_stop_main = EarlyStopping(patience=8)
+early_stop_sub = EarlyStopping(patience=12)
+learning_rate_sub = ReduceLROnPlateau(monitor='val_loss', patience=6,
+                                     factor=0.1)
+early_stop_main = EarlyStopping(patience=10)
 learning_rate_main = ReduceLROnPlateau(monitor='val_loss', patience=4,
-                                       factor=0.1)
+                                       factor=0.5)
 # Logging for Tensorboard
 log_dir_sub = "./logs/fit/submodels/" + dt.datetime.now().strftime(
     "%Y%m%d-%H%M%S")
@@ -157,9 +157,9 @@ def main():
          }
     )
 
-    model = EnsembleModel(
-        dense_shapes, num_classes, compile_params,
-        fit_params, conv_shapes, trainable=False,
+    model = StackingModel(
+        num_classes, compile_params, fit_params,
+        dense_shapes, conv_shapes, trainable=False,
         logging=log_dir_sub
     )
     model.compile(**compile_params)
